@@ -1,68 +1,76 @@
-const { query } = require('../database');
-const { EMPTY_RESULT_ERROR, SQL_ERROR_CODE, UNIQUE_VIOLATION_ERROR } = require('../errors');
+const { PrismaClient, Prisma } = require('@prisma/client');
+const { UNIQUE_VIOLATION_ERROR, EMPTY_RESULT_ERROR } = require('../errors');
+const prisma = new PrismaClient();
 
 module.exports.create = function create(code, name, credit) {
-    return query('CALL create_module($1, $2, $3)', [code, name, credit])
-    .then(function (result) {
-        console.log('Module created successfully');
-    })
-    .catch(function (error) {
+    return prisma.module.create({
+        data: {
+            modCode: code,
+            modName: name,
+            creditUnit: credit,
+        },
+    }).then(function (module) {
+        return module;
+    }).catch(function (error) {
+        // Prisma error codes: https://www.prisma.io/docs/orm/reference/error-reference#p2002
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+            throw new UNIQUE_VIOLATION_ERROR(`Module ${code} already exists! Cannot create duplicate.`);
+        }
         throw error;
     });
 };
 
 module.exports.retrieveByCode = function retrieveByCode(code) {
-    const sql = `SELECT * FROM module WHERE mod_code = $1`;
-    return query(sql, [code]).then(function (result) {
-        const rows = result.rows;
-
-        if (rows.length === 0) {
-            // Note: result.rowCount returns the number of rows processed instead of returned
-            // Read more: https://node-postgres.com/apis/result#resultrowcount-int--null
+    return prisma.module.findUniqueOrThrow({
+        where: {
+            modCode: code,
+        },
+    }).then(function (module) {
+        return module;
+    }).catch(function (error) {
+        // Prisma error codes: https://www.prisma.io/docs/orm/reference/error-reference#p2025
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
             throw new EMPTY_RESULT_ERROR(`Module ${code} not found!`);
         }
-
-        return rows[0];
-    });
-};
-
-module.exports.deleteByCode = function deleteByCode(code) {
-    return query('CALL delete_module($1)', [code])
-    .then(function (result) {
-        console.log('Module deleted successfully');
-    })
-    .catch(function (error) {
         throw error;
     });
 };
 
 module.exports.updateByCode = function updateByCode(code, credit) {
-    return query('CALL update_module($1, $2)', [code, credit])
-    .then(function (result) {
-        console.log('Module updated successfully');
-    })
-    .catch(function (error) {
+    return prisma.module.update({
+        where: {
+            modCode: code,
+        },
+        data: {
+            creditUnit: credit,
+        },
+    }).then(function (module) {
+        // Leave blank
+    }).catch(function (error) {
+        // Prisma error codes: https://www.prisma.io/docs/orm/reference/error-reference#p2025
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+            throw new EMPTY_RESULT_ERROR(`Module ${code} not found!`);
+        }
+        throw error;
+    });
+};
+
+module.exports.deleteByCode = function deleteByCode(code) {
+    return prisma.module.delete({
+        where: {
+            modCode: code,
+        },
+    }).then(function (module) {
+        // Leave blank
+    }).catch(function (error) {
+        // Prisma error codes: https://www.prisma.io/docs/orm/reference/error-reference#p2025
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+            throw new EMPTY_RESULT_ERROR(`Module ${code} not found!`);
+        }
         throw error;
     });
 };
 
 module.exports.retrieveAll = function retrieveAll() {
-    const sql = `SELECT * FROM module`;
-    return query(sql).then(function (result) {
-        return result.rows;
-    });
-};
-
-module.exports.retrieveBulk = function retrieveBulk(codes) {
-    const sql = 'SELECT * FROM module WHERE code IN ($1)';
-    return query(sql, [codes]).then(function (response) {
-        const rows = response.rows;
-        const result = {};
-        for (let i = 0; i < rows.length; i += 1) {
-            const row = rows[i];
-            const code = row.code;
-            result[code] = row;
-        }
-        return result;
-    });
+    return prisma.module.findMany();
 };
